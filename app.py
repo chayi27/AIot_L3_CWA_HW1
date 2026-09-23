@@ -40,8 +40,20 @@ st.markdown("""
         background-color: #0b0f19;
         color: #f1f5f9;
     }
+    
+    /* 隱藏 Streamlit 頂部預設會遮擋畫面的 Deploy 按鈕與原生 Header */
+    header[data-testid="stHeader"] {
+        display: none !important;
+    }
+    #MainMenu {
+        visibility: hidden !important;
+    }
+    footer {
+        visibility: hidden !important;
+    }
+    
     .block-container {
-        padding-top: 1rem;
+        padding-top: 1.2rem;
         padding-bottom: 1.5rem;
         max-width: 98% !important;
     }
@@ -51,7 +63,7 @@ st.markdown("""
         display: flex;
         justify-content: space-between;
         align-items: center;
-        background: rgba(15, 23, 42, 0.8);
+        background: rgba(15, 23, 42, 0.85);
         border: 1px solid rgba(255, 255, 255, 0.08);
         border-radius: 12px;
         padding: 12px 20px;
@@ -144,6 +156,41 @@ st.markdown("""
         color: #94a3b8;
         font-family: monospace;
         margin-top: 4px;
+    }
+
+    /* 移至畫面下方的 Deploy 部署資訊列 */
+    .bottom-deploy-bar {
+        margin-top: 14px;
+        background: rgba(15, 23, 42, 0.85);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 12px;
+        padding: 10px 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 0.86rem;
+        backdrop-filter: blur(12px);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+    }
+    .deploy-link-btn {
+        text-decoration: none;
+        padding: 6px 14px;
+        border-radius: 6px;
+        font-weight: 600;
+        font-size: 0.82rem;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        color: #e2e8f0;
+        background: rgba(255, 255, 255, 0.05);
+        transition: all 0.2s ease;
+    }
+    .deploy-link-btn:hover {
+        background: rgba(255, 255, 255, 0.12);
+        color: #38bdf8;
+    }
+    .deploy-action-btn {
+        background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+        color: white !important;
+        border: 1px solid #3b82f6;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -396,6 +443,27 @@ def main():
             simple_df['均溫'] = ((simple_df['最低'] + simple_df['最高']) / 2).round(1)
             st.dataframe(simple_df, height=170, use_container_width=True, hide_index=True)
         st.markdown('</div>', unsafe_allow_html=True)
+
+    # ==================== 【畫面下方】：專案部署 (Deploy) 與儲存庫工具列 ====================
+    st.markdown("""
+    <div class="bottom-deploy-bar">
+        <div style="display:flex; align-items:center; gap:14px;">
+            <span style="font-size:1rem;">🚀</span>
+            <div>
+                <b>專案部署 (Deploy Center)</b>
+                <span style="color:#94a3b8; margin-left:8px; font-size:0.8rem;">已同步至 GitHub 遠端儲存庫: <code>chayi27/AIot_L3_CWA_HW1</code> (分支: <code>main</code>)</span>
+            </div>
+        </div>
+        <div style="display:flex; gap:10px; align-items:center;">
+            <a href="https://github.com/chayi27/AIot_L3_CWA_HW1" target="_blank" class="deploy-link-btn">
+                📂 開啟 GitHub 倉庫
+            </a>
+            <a href="https://share.streamlit.io" target="_blank" class="deploy-link-btn deploy-action-btn">
+                ☁️ 一鍵部署至 Streamlit Cloud
+            </a>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
 
 if __name__ == "__main__":
