@@ -4,11 +4,13 @@
 功能包含：建立資料庫、創建 TemperatureForecasts 資料表、防重複寫入、查詢檢索。
 """
 
+import os
 import sqlite3
 import pandas as pd
 from typing import List, Dict, Optional
 
-DB_NAME = "data.db"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_NAME = os.path.join(BASE_DIR, "data.db")
 
 
 def get_connection(db_name: str = DB_NAME) -> sqlite3.Connection:

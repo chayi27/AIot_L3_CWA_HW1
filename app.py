@@ -10,6 +10,7 @@ import os
 import sys
 import json
 import sqlite3
+from http.server import BaseHTTPRequestHandler
 import pandas as pd
 from typing import Dict, List
 
@@ -75,7 +76,7 @@ def generate_vercel_html() -> str:
     data_json_str = json.dumps(data_rows, ensure_ascii=False)
     coords_json_str = json.dumps(REGION_COORDINATES, ensure_ascii=False)
 
-    html = f"""<!DOCTYPE html>
+    html = """<!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
     <meta charset="utf-8">
@@ -87,15 +88,15 @@ def generate_vercel_html() -> str:
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
-        * {{ box-sizing: border-box; margin: 0; padding: 0; }}
-        body {{
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
             background-color: #0b0f19;
             color: #f1f5f9;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             overflow-x: hidden;
             padding: 16px 20px;
-        }}
-        .topbar {{
+        }
+        .topbar {
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -105,9 +106,9 @@ def generate_vercel_html() -> str:
             padding: 14px 24px;
             margin-bottom: 14px;
             backdrop-filter: blur(12px);
-        }}
-        .topbar h1 {{ font-size: 1.45rem; color: #38bdf8; display: flex; align-items: center; gap: 8px; }}
-        .badge {{
+        }
+        .topbar h1 { font-size: 1.45rem; color: #38bdf8; display: flex; align-items: center; gap: 8px; }
+        .badge {
             background: rgba(56, 189, 248, 0.15);
             color: #38bdf8;
             border: 1px solid rgba(56, 189, 248, 0.3);
@@ -115,15 +116,15 @@ def generate_vercel_html() -> str:
             border-radius: 9999px;
             font-size: 0.82rem;
             font-weight: 600;
-        }}
-        .main-container {{
+        }
+        .main-container {
             display: grid;
             grid-template-columns: 72% 28%;
             gap: 16px;
-        }}
-        @media (max-width: 1024px) {{
-            .main-container {{ grid-template-columns: 1fr; }}
-        }}
+        }
+        @media (max-width: 1024px) {
+            .main-container { grid-template-columns: 1fr; }
+        }
         #map {{
             height: 680px;
             width: 100%;
@@ -227,7 +228,14 @@ def generate_vercel_html() -> str:
         <!-- 右側控制面板 -->
         <div>
             <div class="card">
-                <div class="card-header">🎛️ 圖層與控制</div>
+                <div class="card-header">🎛️ 圖層與底圖控制</div>
+                <div style="display:flex; gap:8px; margin-bottom:10px;">
+                    <button id="btnOsm" class="btn" style="flex:1; justify-content:center; background:#0284c7; padding:6px 8px; font-size:0.8rem;" onclick="setBasemap('osm')">🗺️ 彩色街道 (OSM)</button>
+                    <button id="btnDark" class="btn" style="flex:1; justify-content:center; background:rgba(255,255,255,0.08); padding:6px 8px; font-size:0.8rem;" onclick="setBasemap('dark')">🌙 深色底圖</button>
+                </div>
+                <label style="display:flex; align-items:center; gap:8px; font-size:0.82rem; margin-bottom:10px; cursor:pointer;">
+                    <input type="checkbox" id="showLabelsCheck" checked onchange="toggleLabels()"> 顯示氣溫數字標籤
+                </label>
                 <label style="font-size:0.78rem; color:#94a3b8;">📅 選擇預報日期：</label>
                 <select id="dateSelect" onchange="onDateChange()"></select>
                 <label style="font-size:0.78rem; color:#94a3b8;">📍 選擇預報分區：</label>
@@ -279,18 +287,48 @@ def generate_vercel_html() -> str:
     </div>
 
     <script>
-        const allData = {data_json_str};
-        const regionCoords = {coords_json_str};
+        const allData = __DATA_JSON__;
+        const regionCoords = __COORDS_JSON__;
 
-        // 初始化底圖：預設為彩色街道圖 (OpenStreetMap)
+        // 初始化底圖
         const map = L.map('map').setView([23.72, 120.95], 7);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '© OpenStreetMap contributors',
             maxZoom: 18
-        }).addTo(map);
+        });
+        const darkLayer = L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+            attribution: 'Esri Dark Canvas',
+            maxZoom: 16
+        });
+
+        let currentTileLayer = null;
+        function setBasemap(type) {
+            if (currentTileLayer) map.removeLayer(currentTileLayer);
+            if (type === 'dark') {
+                currentTileLayer = darkLayer.addTo(map);
+                document.getElementById('btnDark').style.background = '#0284c7';
+                document.getElementById('btnOsm').style.background = 'rgba(255,255,255,0.08)';
+            } else {
+                currentTileLayer = osmLayer.addTo(map);
+                document.getElementById('btnOsm').style.background = '#0284c7';
+                document.getElementById('btnDark').style.background = 'rgba(255,255,255,0.08)';
+            }
+        }
+        setBasemap('osm');
 
         let markersLayer = L.layerGroup().addTo(map);
+        let labelsLayer = L.layerGroup().addTo(map);
         let chartInstance = null;
+        let showLabels = true;
+
+        function toggleLabels() {
+            showLabels = document.getElementById('showLabelsCheck').checked;
+            if (showLabels) {
+                if (!map.hasLayer(labelsLayer)) map.addLayer(labelsLayer);
+            } else {
+                if (map.hasLayer(labelsLayer)) map.removeLayer(labelsLayer);
+            }
+        }
 
         // 提取所有不重複日期與地區
         const dates = [...new Set(allData.map(d => d.dataDate))].sort();
@@ -298,92 +336,103 @@ def generate_vercel_html() -> str:
 
         // 填充選單
         const dateSelect = document.getElementById('dateSelect');
-        dates.forEach(d => {{
+        dates.forEach(d => {
             const opt = document.createElement('option');
             opt.value = d; opt.innerText = d;
             dateSelect.appendChild(opt);
-        }});
+        });
 
         const regionSelect = document.getElementById('regionSelect');
-        regions.forEach(r => {{
+        regions.forEach(r => {
             const opt = document.createElement('option');
             opt.value = r; opt.innerText = r;
             if (r === '中部地區') opt.selected = true;
             regionSelect.appendChild(opt);
-        }});
+        });
 
-        function getColor(temp) {{
+        function getColor(temp) {
             if (temp < 15) return '#2c7bb6';
             if (temp < 20) return '#5aa2cf';
             if (temp < 25) return '#7fcdbb';
             if (temp < 28) return '#fee08b';
             if (temp < 32) return '#fdae61';
             return '#d73027';
-        }}
+        }
 
-        function updateMap() {{
+        function updateMap() {
             markersLayer.clearLayers();
+            labelsLayer.clearLayers();
             const curDate = dateSelect.value;
             const dateRows = allData.filter(d => d.dataDate === curDate);
 
-            dateRows.forEach(row => {{
+            dateRows.forEach(row => {
                 const coord = regionCoords[row.regionName];
                 if (!coord) return;
                 const avgT = ((row.mint + row.maxt) / 2).toFixed(1);
                 const color = getColor(avgT);
 
-                const circle = L.circleMarker([coord.lat, coord.lon], {{
+                const circle = L.circleMarker([coord.lat, coord.lon], {
                     radius: 25,
                     fillColor: color,
                     color: '#ffffff',
                     weight: 2,
                     opacity: 1,
                     fillOpacity: 0.9
-                }}).addTo(markersLayer);
+                }).addTo(markersLayer);
+
+                circle.on('click', () => {
+                    regionSelect.value = row.regionName;
+                    updateSidePanel();
+                });
 
                 circle.bindPopup(`
                     <div style="font-family:sans-serif; min-width:130px; color:#0f172a;">
-                        <h3 style="margin:0 0 4px 0; color:#1e3a8a;">${{row.regionName}}</h3>
-                        <b>日期：</b>${{row.dataDate}}<br/>
-                        <b>最高溫：</b><span style="color:#ef4444; font-weight:bold;">${{row.maxt}}°C</span><br/>
-                        <b>最低溫：</b><span style="color:#2563eb; font-weight:bold;">${{row.mint}}°C</span><br/>
-                        <b>平均溫：</b><b>${{avgT}}°C</b>
+                        <h3 style="margin:0 0 4px 0; color:#1e3a8a;">${row.regionName}</h3>
+                        <b>日期：</b>${row.dataDate}<br/>
+                        <b>最高溫：</b><span style="color:#ef4444; font-weight:bold;">${row.maxt}°C</span><br/>
+                        <b>最低溫：</b><span style="color:#2563eb; font-weight:bold;">${row.mint}°C</span><br/>
+                        <b>平均溫：</b><b>${avgT}°C</b>
                     </div>
                 `);
 
-                const label = L.marker([coord.lat, coord.lon], {{
-                    icon: L.divIcon({{
-                        html: `<div style="font-weight:900; color:#ffffff; text-shadow:0 1px 3px #000; font-size:13px; text-align:center; transform:translate(-50%, -50%);">${{Math.round(avgT)}}°</div>`,
+                const label = L.marker([coord.lat, coord.lon], {
+                    icon: L.divIcon({
+                        html: `<div style="font-weight:900; color:#ffffff; text-shadow:0 1px 3px #000; font-size:13px; text-align:center; transform:translate(-50%, -50%); cursor:pointer;">${Math.round(avgT)}°</div>`,
                         className: ''
-                    }})
-                }}).addTo(markersLayer);
-            }});
-        }}
+                    })
+                }).addTo(labelsLayer);
 
-        function updateSidePanel() {{
+                label.on('click', () => {
+                    regionSelect.value = row.regionName;
+                    updateSidePanel();
+                });
+            });
+        }
+
+        function updateSidePanel() {
             const curRegion = regionSelect.value;
             const regionRows = allData.filter(d => d.regionName === curRegion).sort((a,b) => a.dataDate.localeCompare(b.dataDate));
             if (regionRows.length === 0) return;
 
-            document.getElementById('kpiTitle').innerText = `📊 ${{curRegion}} - 即時指標`;
+            document.getElementById('kpiTitle').innerText = `📊 ${curRegion} - 即時指標`;
             const first = regionRows[0];
             const avg = ((first.mint + first.maxt) / 2).toFixed(1);
             const diff = (first.maxt - first.mint).toFixed(1);
 
-            document.getElementById('maxTempVal').innerText = `${{first.maxt}}°C`;
-            document.getElementById('minTempVal').innerText = `${{first.mint}}°C`;
-            document.getElementById('avgTempVal').innerText = `${{avg}}°C`;
-            document.getElementById('diffTempVal').innerText = `${{diff}}°C`;
+            document.getElementById('maxTempVal').innerText = `${first.maxt}°C`;
+            document.getElementById('minTempVal').innerText = `${first.mint}°C`;
+            document.getElementById('avgTempVal').innerText = `${avg}°C`;
+            document.getElementById('diffTempVal').innerText = `${diff}°C`;
 
             // 更新表格
             const tb = document.getElementById('tableBody');
             tb.innerHTML = '';
-            regionRows.forEach(r => {{
+            regionRows.forEach(r => {
                 const rAvg = ((r.mint + r.maxt) / 2).toFixed(1);
                 const tr = document.createElement('tr');
-                tr.innerHTML = `<td>${{r.dataDate.slice(5)}}</td><td style="color:#60a5fa;">${{r.mint}}°</td><td style="color:#f87171;">${{r.maxt}}°</td><td>${{rAvg}}°</td>`;
+                tr.innerHTML = `<td>${r.dataDate.slice(5)}</td><td style="color:#60a5fa;">${r.mint}°</td><td style="color:#f87171;">${r.maxt}°</td><td>${rAvg}°</td>`;
                 tb.appendChild(tr);
-            }});
+            });
 
             // 更新折線圖
             const ctx = document.getElementById('tempChart').getContext('2d');
@@ -393,55 +442,77 @@ def generate_vercel_html() -> str:
 
             if (chartInstance) chartInstance.destroy();
 
-            chartInstance = new Chart(ctx, {{
+            chartInstance = new Chart(ctx, {
                 type: 'line',
-                data: {{
+                data: {
                     labels: labels,
                     datasets: [
-                        {{ label: '最高溫', data: maxts, borderColor: '#f87171', backgroundColor: 'rgba(248,113,113,0.1)', tension: 0.3, pointRadius: 4 }},
-                        {{ label: '最低溫', data: mints, borderColor: '#38bdf8', backgroundColor: 'rgba(56,189,248,0.1)', tension: 0.3, pointRadius: 4 }}
+                        { label: '最高溫', data: maxts, borderColor: '#f87171', backgroundColor: 'rgba(248,113,113,0.1)', tension: 0.3, pointRadius: 4 },
+                        { label: '最低溫', data: mints, borderColor: '#38bdf8', backgroundColor: 'rgba(56,189,248,0.1)', tension: 0.3, pointRadius: 4 }
                     ]
-                }},
-                options: {{
+                },
+                options: {
                     responsive: true,
-                    plugins: {{ legend: {{ labels: {{ color: '#94a3b8', font: {{ size: 10 }} }} }} }},
-                    scales: {{
-                        x: {{ ticks: {{ color: '#94a3b8', font: {{ size: 9 }} }}, grid: {{ color: 'rgba(255,255,255,0.05)' }} }},
-                        y: {{ ticks: {{ color: '#94a3b8', font: {{ size: 9 }} }}, grid: {{ color: 'rgba(255,255,255,0.05)' }} }}
-                    }}
-                }}
-            }});
-        }}
+                    plugins: { legend: { labels: { color: '#94a3b8', font: { size: 10 } } } },
+                    scales: {
+                        x: { ticks: { color: '#94a3b8', font: { size: 9 } }, grid: { color: 'rgba(255,255,255,0.05)' } },
+                        y: { ticks: { color: '#94a3b8', font: { size: 9 } }, grid: { color: 'rgba(255,255,255,0.05)' } }
+                    }
+                }
+            });
+        }
 
-        function onDateChange() {{ updateMap(); }}
-        function onRegionChange() {{ updateSidePanel(); }}
+        function onDateChange() { updateMap(); }
+        function onRegionChange() { updateSidePanel(); }
 
         updateMap();
         updateSidePanel();
     </script>
 </body>
 </html>"""
-    return html
+    return html.replace("__DATA_JSON__", data_json_str).replace("__COORDS_JSON__", coords_json_str)
 
 
 # ==============================================================================
-# Vercel Entrypoint Handler (符合 WSGI 標準)
+# Vercel Entrypoint Handlers
+# (支援 BaseHTTPRequestHandler 與 WSGI 標準，符合 Vercel Python Runtime 要求)
 # ==============================================================================
 
-def app(environ, start_response):
-    """Vercel Python Runtime 入口點 (導出頂級 "app" 與 "handler" 變數)"""
+class handler(BaseHTTPRequestHandler):
+    """Vercel BaseHTTPRequestHandler 入口點"""
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header('Content-Type', 'text/html; charset=utf-8')
+        self.send_header('Cache-Control', 'public, max-age=60')
+        self.end_headers()
+        try:
+            body = generate_vercel_html()
+            self.wfile.write(body.encode('utf-8'))
+        except Exception as e:
+            err_html = f"<html><body><h2>Error: {e}</h2></body></html>"
+            self.wfile.write(err_html.encode('utf-8'))
+        return
+
+
+def wsgi_app(environ, start_response):
+    """Vercel WSGI 入口點"""
     status = '200 OK'
     headers = [
         ('Content-type', 'text/html; charset=utf-8'),
         ('Cache-Control', 'public, max-age=60')
     ]
     start_response(status, headers)
-    body = generate_vercel_html()
-    return [body.encode('utf-8')]
+    try:
+        body = generate_vercel_html()
+        return [body.encode('utf-8')]
+    except Exception as e:
+        err_html = f"<html><body><h2>Error: {e}</h2></body></html>"
+        return [err_html.encode('utf-8')]
 
-# Vercel 所要求的頂級入口點別名
-handler = app
-application = app
+
+# 導出頂級變數供 Vercel 自動識別 (app / application / handler)
+app = wsgi_app
+application = wsgi_app
 
 
 # ==============================================================================
