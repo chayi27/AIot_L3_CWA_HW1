@@ -40,7 +40,15 @@ def load_env_file(filepath: str = ".env"):
 
 load_env_file()
 
-# 中央氣象署 API 授權金鑰 (優先由 .env 或系統環境變數讀取，不再硬編碼)
+# 支援 Streamlit Cloud (share.streamlit.io) 的 Secrets 環境變數
+try:
+    import streamlit as st
+    if hasattr(st, "secrets") and "CWA_API_KEY" in st.secrets:
+        os.environ["CWA_API_KEY"] = st.secrets["CWA_API_KEY"]
+except Exception:
+    pass
+
+# 中央氣象署 API 授權金鑰 (優先由 Streamlit Cloud Secrets / .env / 系統環境變數讀取)
 DEFAULT_API_KEY = os.getenv("CWA_API_KEY", "")
 
 # 台灣分區對應縣市 (對應作業 6 大預報區域)
