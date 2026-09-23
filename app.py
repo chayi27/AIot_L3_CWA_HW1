@@ -451,6 +451,7 @@ application = app
 def run_streamlit_app():
     import streamlit as st
     import matplotlib.pyplot as plt
+    import folium
     from streamlit_folium import st_folium
 
     database.init_db()
