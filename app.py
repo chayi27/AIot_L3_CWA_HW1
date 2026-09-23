@@ -43,14 +43,7 @@ st.markdown("""
     .sub-title {
         font-size: 1rem;
         color: #4B5563;
-        margin-bottom: 1.5rem;
-    }
-    .metric-card {
-        background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
-        border: 1px solid #bae6fd;
-        border-radius: 12px;
-        padding: 16px;
-        text-align: center;
+        margin-bottom: 1.2rem;
     }
     .badge-author {
         display: inline-block;
@@ -61,6 +54,14 @@ st.markdown("""
         font-size: 0.85rem;
         font-weight: 600;
     }
+    .legend-box {
+        background: #F8FAFC;
+        border: 1px solid #E2E8F0;
+        border-radius: 8px;
+        padding: 10px 14px;
+        margin-top: 10px;
+        font-size: 0.88rem;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -68,13 +69,13 @@ st.markdown("""
 def get_temp_color(avg_temp: float) -> str:
     """依平均溫度區間著色 (步驟 17: <20°C 藍, 20-25°C 綠, 25-30°C 橘黃, >30°C 紅)"""
     if avg_temp < 20.0:
-        return "#3B82F6"  # 藍色
+        return "#2563EB"  # 藍色 (<20°C)
     elif 20.0 <= avg_temp < 25.0:
-        return "#10B981"  # 綠色
+        return "#10B981"  # 綠色 (20-25°C)
     elif 25.0 <= avg_temp <= 30.0:
-        return "#F59E0B"  # 橘黃色
+        return "#F59E0B"  # 黃色/橘色 (25-30°C)
     else:
-        return "#EF4444"  # 紅色
+        return "#EF4444"  # 紅色 (>30°C)
 
 
 def main():
@@ -120,17 +121,18 @@ def main():
         )
 
         st.markdown("---")
-        st.markdown("#### 📌 專案架構特色")
-        st.caption("• 中央氣象署 (CWA) Open Data API 介接")
-        st.caption("• SQLite 結構化存儲與防重複插入")
-        st.caption("• Pandas 聚合分析一週最高/最低氣溫")
-        st.caption("• Folium 台灣分區互動地圖視覺化")
+        st.markdown("#### 📌 HW10 核心規範")
+        st.caption("1. 介接 CWA API 六大分區一週氣溫")
+        st.caption("2. 解析提取 MinT 與 MaxT")
+        st.caption("3. 存入 SQLite data.db (防重複寫入)")
+        st.caption("4. Streamlit 透過 SQL 查詢顯示折線圖與表格")
+        st.caption("5. 進階：Folium 台灣互動地圖依溫度變色")
 
     # 主畫面標題 (步驟 16、19)
     st.markdown('<div class="main-title">🌤️ 台灣天氣預報 Taiwan Weather Forecast</div>', unsafe_allow_html=True)
     st.markdown('<div class="sub-title">從氣象資料到互動式天氣預報應用 | 開發者：<b>AIot_L3_CWA_HW1</b></div>', unsafe_allow_html=True)
 
-    # 讀取所選地區之一週資料 (步驟 12)
+    # 讀取所選地區之一週資料 (步驟 12: 使用 SQL 從 SQLite 讀取)
     df_region = database.get_forecast_by_region(selected_region)
 
     if df_region.empty:
@@ -144,7 +146,7 @@ def main():
     temp_diff = round(first_day['maxt'] - first_day['mint'], 1)
 
     with col1:
-        st.metric("今日日期", str(first_day['dataDate']))
+        st.metric("目前預報地區", f"{selected_region}")
     with col2:
         st.metric("🔥 今日最高溫", f"{first_day['maxt']} °C")
     with col3:
@@ -154,24 +156,94 @@ def main():
 
     st.markdown("---")
 
-    # 分頁切換：折線圖與表格 vs 台灣地圖
-    tab1, tab2 = st.tabs(["📈 一週氣溫趨勢與數據 (Forecast Chart & Table)", "🗺️ 台灣互動天氣地圖 (Interactive Map)"])
+    # 雙欄並列版面配置：左邊台灣互動地圖，右邊氣溫折線圖與數據表 (對應作業成果展現完整 Dashboard)
+    col_left, col_right = st.columns([1, 1], gap="medium")
 
-    with tab1:
-        st.subheader(f"📊 {selected_region} - 一週最高與最低氣溫 (步驟 14)")
+    # ==================== 左欄：台灣互動天氣地圖 (步驟 17, 18) ====================
+    with col_left:
+        st.subheader(f"🗺️ 台灣互動天氣地圖 (步驟 17, 18)")
+        st.caption(f"📅 預報日期：**{selected_date}**（可在左側側邊欄切換不同日期）")
+
+        # 讀取該日期所有分區資料
+        df_date = database.get_forecast_by_date(selected_date)
+
+        # 建立 Folium 地圖，採用穩定的 OpenStreetMap 免金鑰圖層，中心設在台灣
+        m = folium.Map(
+            location=[23.75, 120.95],
+            zoom_start=7,
+            tiles="OpenStreetMap"
+        )
+
+        # 將 6 大分區氣候點標註在地圖上
+        for _, row in df_date.iterrows():
+            r_name = row['regionName']
+            if r_name in REGION_COORDINATES:
+                coord = REGION_COORDINATES[r_name]
+                avg_temp_val = round((row['mint'] + row['maxt']) / 2, 1)
+                color = get_temp_color(avg_temp_val)
+
+                popup_html = f"""
+                <div style="font-family:sans-serif; min-width:130px; font-size:13px;">
+                    <b style="font-size:15px; color:#1E3A8A;">{r_name}</b><br/>
+                    <span style="color:#6B7280;">日期：{row['dataDate']}</span>
+                    <hr style="margin:4px 0;"/>
+                    最高溫：<span style="color:#EF4444; font-weight:bold;">{row['maxt']}°C</span><br/>
+                    最低溫：<span style="color:#2563EB; font-weight:bold;">{row['mint']}°C</span><br/>
+                    平均溫：<b>{avg_temp_val}°C</b>
+                </div>
+                """
+
+                # 著色氣泡標記
+                folium.CircleMarker(
+                    location=[coord['lat'], coord['lon']],
+                    radius=20,
+                    popup=folium.Popup(popup_html, max_width=240),
+                    tooltip=f"{r_name}：平均 {avg_temp_val}°C (最低 {row['mint']}° / 最高 {row['maxt']}°)",
+                    color=color,
+                    fill=True,
+                    fill_color=color,
+                    fill_opacity=0.8,
+                    weight=2
+                ).add_to(m)
+
+                # 在氣泡中央顯示平均溫度文字標籤
+                folium.Marker(
+                    location=[coord['lat'], coord['lon']],
+                    icon=folium.DivIcon(
+                        html=f"""<div style="font-weight:bold; color:white; text-shadow: 1px 1px 2px #000; font-size:11px; text-align:center; transform: translate(-50%, -50%);">{avg_temp_val}°</div>"""
+                    )
+                ).add_to(m)
+
+        # 渲染 Folium 地圖 (自適應寬度)
+        st_folium(m, width=540, height=450)
+
+        # 溫度色階圖例 (步驟 17 評分標準)
+        st.markdown("""
+        <div class="legend-box">
+            <b>🎨 平均溫度分級著色圖例 (步驟 17)：</b><br/>
+            <span style="color:#2563EB; font-weight:bold;">● &lt; 20°C (藍色: 寒冷/偏涼)</span> &nbsp;|&nbsp; 
+            <span style="color:#10B981; font-weight:bold;">● 20°C ~ 25°C (綠色: 舒適)</span><br/>
+            <span style="color:#F59E0B; font-weight:bold;">● 25°C ~ 30°C (黃色: 溫暖)</span> &nbsp;|&nbsp; 
+            <span style="color:#EF4444; font-weight:bold;">● &gt; 30°C (紅色: 炎熱)</span>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # ==================== 右欄：折線圖與資料表 (步驟 14, 15) ====================
+    with col_right:
+        st.subheader(f"📈 {selected_region} - 一週氣溫走勢圖 (步驟 14)")
 
         # 繪製折線圖 (步驟 14: 最高溫紅線 MaxT, 最低溫藍線 MinT)
-        fig, ax = plt.subplots(figsize=(10, 4.5), dpi=120)
+        fig, ax = plt.subplots(figsize=(8, 4.2), dpi=120)
 
-        dates = df_region['dataDate'].apply(lambda x: x[5:]).tolist()  # MM-DD 格式
+        dates = df_region['dataDate'].apply(lambda x: x[5:]).tolist()  # MM-DD
         maxts = df_region['maxt'].tolist()
         mints = df_region['mint'].tolist()
 
-        # 畫線與端點
+        # 畫線與端點標記
         ax.plot(dates, maxts, marker='o', color='#EF4444', linewidth=2.5, label='最高氣溫 (MaxT)')
-        ax.plot(dates, mints, marker='o', color='#3B82F6', linewidth=2.5, label='最低氣溫 (MinT)')
+        ax.plot(dates, mints, marker='o', color='#2563EB', linewidth=2.5, label='最低氣溫 (MinT)')
 
-        # 標註各點溫度數值
+        # 在每個折點上方標記數值
         for i, (d, mx, mn) in enumerate(zip(dates, maxts, mints)):
             ax.text(i, mx + 0.4, f"{mx}°", ha='center', va='bottom', fontsize=9, fontweight='bold', color='#B91C1C')
             ax.text(i, mn - 0.7, f"{mn}°", ha='center', va='top', fontsize=9, fontweight='bold', color='#1D4ED8')
@@ -181,7 +253,7 @@ def main():
         y_max = max(maxts) + 3
         ax.set_ylim(y_min, y_max)
         ax.set_ylabel("氣溫 (°C)", fontsize=11)
-        ax.set_title(f"{selected_region} 一週氣溫變化趨勢", fontsize=13, fontweight='bold', pad=12)
+        ax.set_title(f"{selected_region} 一週高低氣溫預報", fontsize=12, fontweight='bold', pad=10)
         ax.grid(True, linestyle='--', alpha=0.5)
         ax.legend(loc='upper right', frameon=True)
 
@@ -194,85 +266,19 @@ def main():
         st.markdown("#### 📋 清楚呈現一週資料 (步驟 15)")
         # 整理呈現表格
         display_df = df_region[['dataDate', 'mint', 'maxt']].copy()
-        display_df.columns = ['預報日期 (Date)', '最低氣溫 (MinT °C)', '最高氣溫 (MaxT °C)']
-        display_df['平均氣溫 (Avg °C)'] = ((display_df['最低氣溫 (MinT °C)'] + display_df['最高氣溫 (MaxT °C)']) / 2).round(1)
-        display_df['溫差 (Diff °C)'] = (display_df['最高氣溫 (MaxT °C)'] - display_df['最低氣溫 (MinT °C)']).round(1)
+        display_df.columns = ['預報日期', '最低溫 (°C)', '最高溫 (°C)']
+        display_df['平均溫 (°C)'] = ((display_df['最低溫 (°C)'] + display_df['最高溫 (°C)']) / 2).round(1)
+        display_df['日溫差 (°C)'] = (display_df['最高溫 (°C)'] - display_df['最低溫 (°C)']).round(1)
 
         st.dataframe(display_df, use_container_width=True, hide_index=True)
 
-    with tab2:
-        st.subheader(f"🗺️ 選擇日期顯示地圖：{selected_date} (步驟 17, 18)")
-
-        # 讀取該日期所有地區資料
-        df_date = database.get_forecast_by_date(selected_date)
-
-        col_map, col_info = st.columns([3, 2])
-
-        with col_map:
-            # 建立 Folium 地圖，中心設定在台灣
-            m = folium.Map(
-                location=[23.7, 120.95],
-                zoom_start=7,
-                tiles="CartoDB positron"
-            )
-
-            # 加入各地區的溫度標記 (步驟 17, 18)
-            for _, row in df_date.iterrows():
-                r_name = row['regionName']
-                if r_name in REGION_COORDINATES:
-                    coord = REGION_COORDINATES[r_name]
-                    avg_t = round((row['mint'] + row['maxt']) / 2, 1)
-                    color = get_temp_color(avg_t)
-
-                    popup_html = f"""
-                    <div style="font-family:sans-serif; min-width:140px;">
-                        <h4 style="margin:0 0 6px 0; color:#1E3A8A;">{r_name}</h4>
-                        <hr style="margin:4px 0;"/>
-                        <b>日期：</b>{row['dataDate']}<br/>
-                        <b>最高溫：</b><span style="color:#EF4444; font-weight:bold;">{row['maxt']}°C</span><br/>
-                        <b>最低溫：</b><span style="color:#3B82F6; font-weight:bold;">{row['mint']}°C</span><br/>
-                        <b>平均溫：</b><b>{avg_t}°C</b>
-                    </div>
-                    """
-
-                    # 圓圈熱區標記
-                    folium.CircleMarker(
-                        location=[coord['lat'], coord['lon']],
-                        radius=22,
-                        popup=folium.Popup(popup_html, max_width=250),
-                        tooltip=f"{r_name}: 平均 {avg_t}°C (Min: {row['mint']}° / Max: {row['maxt']}°)",
-                        color=color,
-                        fill=True,
-                        fill_color=color,
-                        fill_opacity=0.75,
-                        weight=2
-                    ).add_to(m)
-
-                    # 數字文字標籤
-                    folium.Marker(
-                        location=[coord['lat'], coord['lon']],
-                        icon=folium.DivIcon(
-                            html=f"""<div style="font-weight:bold; color:white; text-shadow: 1px 1px 2px #000; font-size:11px; text-align:center; transform: translate(-50%, -50%);">{avg_t}°</div>"""
-                        )
-                    ).add_to(m)
-
-            # 顯示地圖
-            st_folium(m, width=580, height=480)
-
-        with col_info:
-            st.markdown("#### 🎨 平均溫度顏色圖例 (步驟 17)")
-            st.markdown("""
-            - 🔵 **< 20°C**：寒冷 / 偏涼
-            - 🟢 **20°C ~ 25°C**：舒適宜人
-            - 🟡 **25°C ~ 30°C**：溫暖
-            - 🔴 **> 30°C**：炎熱高溫
-            """)
-
-            st.markdown(f"#### 📊 {selected_date} 全台各地氣溫概況")
-            summary_table = df_date[['regionName', 'mint', 'maxt']].copy()
-            summary_table.columns = ['分區 (Region)', '最低溫 (°C)', '最高溫 (°C)']
-            summary_table['平均溫 (°C)'] = ((summary_table['最低溫 (°C)'] + summary_table['最高溫 (°C)']) / 2).round(1)
-            st.dataframe(summary_table, use_container_width=True, hide_index=True)
+    # 頁面下方：當日全台分區總覽表格
+    st.markdown("---")
+    st.subheader(f"📊 {selected_date} 全台六大分區氣溫對照表")
+    summary_all = df_date[['regionName', 'mint', 'maxt']].copy()
+    summary_all.columns = ['分區名稱', '最低氣溫 (°C)', '最高氣溫 (°C)']
+    summary_all['平均氣溫 (°C)'] = ((summary_all['最低氣溫 (°C)'] + summary_all['最高氣溫 (°C)']) / 2).round(1)
+    st.dataframe(summary_all, use_container_width=True, hide_index=True)
 
 
 if __name__ == "__main__":
