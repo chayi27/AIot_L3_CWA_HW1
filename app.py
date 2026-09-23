@@ -282,12 +282,12 @@ def generate_vercel_html() -> str:
         const allData = {data_json_str};
         const regionCoords = {coords_json_str};
 
-        // 初始化底圖 (Esri Dark Canvas)
+        // 初始化底圖：預設為彩色街道圖 (OpenStreetMap)
         const map = L.map('map').setView([23.72, 120.95], 7);
-        L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{{z}}/{{y}}/{{x}}', {{
-            attribution: 'Esri World Dark Gray',
-            maxZoom: 16
-        }}).addTo(map);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors',
+            maxZoom: 18
+        }).addTo(map);
 
         let markersLayer = L.layerGroup().addTo(map);
         let chartInstance = null;
@@ -536,7 +536,7 @@ def run_streamlit_app():
 
         col_b1, col_b2 = st.columns(2)
         with col_b1:
-            basemap_mode = st.radio("地圖風格：", ["深色 (Windy)", "街道圖 (OSM)"], index=0, label_visibility="collapsed")
+            basemap_mode = st.radio("地圖風格：", ["彩色街道圖 (OSM)", "深色無光害 (Dark)"], index=0, label_visibility="collapsed")
         with col_b2:
             show_labels = st.checkbox("顯示數字標籤", value=True)
             if st.button("🔄 刷新 API", use_container_width=True):
