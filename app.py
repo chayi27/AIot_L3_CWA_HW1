@@ -125,40 +125,40 @@ def generate_vercel_html() -> str:
         @media (max-width: 1024px) {
             .main-container { grid-template-columns: 1fr; }
         }
-        #map {{
+        #map {
             height: 680px;
             width: 100%;
             border-radius: 12px;
             border: 1px solid rgba(255, 255, 255, 0.08);
             z-index: 1;
-        }}
-        .card {{
+        }
+        .card {
             background: rgba(15, 23, 42, 0.8);
             border: 1px solid rgba(255, 255, 255, 0.08);
             border-radius: 12px;
             padding: 14px;
             margin-bottom: 12px;
             backdrop-filter: blur(12px);
-        }}
-        .card-header {{
+        }
+        .card-header {
             font-size: 0.92rem;
             font-weight: 700;
             color: #e2e8f0;
             margin-bottom: 10px;
             padding-bottom: 6px;
             border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-        }}
-        .metric-grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }}
-        .metric-cell {{
+        }
+        .metric-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .metric-cell {
             background: rgba(30, 41, 59, 0.6);
             border: 1px solid rgba(255, 255, 255, 0.05);
             border-radius: 8px;
             padding: 8px 10px;
             text-align: center;
-        }}
-        .metric-label {{ font-size: 0.75rem; color: #94a3b8; }}
-        .metric-val {{ font-size: 1.25rem; font-weight: 800; color: #f8fafc; }}
-        select {{
+        }
+        .metric-label { font-size: 0.75rem; color: #94a3b8; }
+        .metric-val { font-size: 1.25rem; font-weight: 800; color: #f8fafc; }
+        select {
             width: 100%;
             background: #1e293b;
             color: #f8fafc;
@@ -167,19 +167,19 @@ def generate_vercel_html() -> str:
             border-radius: 6px;
             font-size: 0.9rem;
             margin-bottom: 8px;
-        }}
-        .gradient-bar {{
+        }
+        .gradient-bar {
             height: 10px;
             width: 100%;
             border-radius: 9999px;
             background: linear-gradient(to right, #2c7bb6, #5aa2cf, #abd9e9, #7fcdbb, #d9ef8b, #fee08b, #fdae61, #f46d43, #d73027);
             margin-top: 6px;
-        }}
-        .scale-ticks {{ display: flex; justify-content: space-between; font-size: 0.75rem; color: #94a3b8; margin-top: 4px; }}
-        table {{ width: 100%; border-collapse: collapse; font-size: 0.82rem; text-align: center; }}
-        th, td {{ padding: 6px; border-bottom: 1px solid rgba(255, 255, 255, 0.06); }}
-        th {{ color: #94a3b8; }}
-        .bottom-bar {{
+        }
+        .scale-ticks { display: flex; justify-content: space-between; font-size: 0.75rem; color: #94a3b8; margin-top: 4px; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.82rem; text-align: center; }
+        th, td { padding: 6px; border-bottom: 1px solid rgba(255, 255, 255, 0.06); }
+        th { color: #94a3b8; }
+        .bottom-bar {
             margin-top: 14px;
             background: rgba(15, 23, 42, 0.85);
             border: 1px solid rgba(255, 255, 255, 0.08);
@@ -189,8 +189,8 @@ def generate_vercel_html() -> str:
             justify-content: space-between;
             align-items: center;
             font-size: 0.85rem;
-        }}
-        .btn {{
+        }
+        .btn {
             text-decoration: none;
             padding: 6px 14px;
             border-radius: 6px;
@@ -200,7 +200,7 @@ def generate_vercel_html() -> str:
             display: inline-flex;
             align-items: center;
             gap: 6px;
-        }}
+        }
     </style>
 </head>
 <body>
@@ -467,6 +467,10 @@ def generate_vercel_html() -> str:
 
         updateMap();
         updateSidePanel();
+
+        // 確保 Leaflet 容器尺寸重算，防止地圖瓦片空白或灰磚
+        setTimeout(() => { map.invalidateSize(); }, 250);
+        window.addEventListener('resize', () => { map.invalidateSize(); });
     </script>
 </body>
 </html>"""
